@@ -8,7 +8,6 @@ class App {
   renderer: THREE.WebGLRenderer
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
-  mainLight: THREE.SpotLight
   font: THREE.Font
   shadowEnabled: boolean
   rotationY: number
@@ -30,6 +29,7 @@ class App {
     line2: THREE.Mesh
     ring: THREE.Mesh
     darkInner: THREE.Mesh
+    mainLight: THREE.SpotLight
   }
 
   material: {
@@ -56,6 +56,7 @@ class App {
       line2: null,
       ring: null,
       darkInner: null,
+      mainLight: null
     };
 
     this.material = {
@@ -87,6 +88,7 @@ class App {
         resolve()
       })
     })
+    
     await Promise.all([
       loadFont(), loadTexture()
     ])
@@ -122,9 +124,7 @@ class App {
 
   loadRing = (dim: string) => {
     const jsonLoader = new THREE.LegacyJSONLoader();
-    const path = this.twoLine
-      ? "jsonring/wordsring" + dim + ".json"
-      : "jsonring/wordsring" + dim + "s.json";
+    const path = `jsonring/wordsring${dim}${this.twoLine ? "" : "s"}.json`
     jsonLoader.load(path, (geometry) => {
       this.element.wordsRing.remove(this.element.ring);
       this.element.ring = new THREE.Mesh(geometry, this.material.ringMaterial);
@@ -241,56 +241,55 @@ class App {
   }
 
   initController = () => {
-    let onPointerDownPointerX: number
-    let onPointerDownPointerY: number
+    let onPointerDownX: number
+    let onPointerDownY: number
     let onPointerDownLon: number
     let onPointerDownLat: number
 
-
-    const MouseDown = (event) => {
+    const mouseDownHandler = (event: MouseEvent) => {
       event.preventDefault();
-      onPointerDownPointerX = event.clientX;
-      onPointerDownPointerY = event.clientY;
+      onPointerDownX = event.clientX;
+      onPointerDownY = event.clientY;
       onPointerDownLon = this.rotationY;
       onPointerDownLat = this.rotationX;
-      document.addEventListener("mousemove", MouseMove, false);
-      document.addEventListener("mouseup", MouseUp, false);
+      document.addEventListener("mousemove", mouseMoveHandler, false);
+      document.addEventListener("mouseup", mouseUpHandler, false);
       this.rotationKeeper = 0;
     }
 
-    const TouchStart = (event) => {
+    const touchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
-      onPointerDownPointerX = event.touches[0].clientX
-      onPointerDownPointerY = event.touches[0].clientY
+      onPointerDownX = event.touches[0].clientX
+      onPointerDownY = event.touches[0].clientY
       onPointerDownLon = this.rotationY
       onPointerDownLat = this.rotationX
-      document.addEventListener("touchmove", TouchMove, false)
-      document.addEventListener("touchend", MouseUp, false)
+      document.addEventListener("touchmove", touchMoveHandler, false)
+      document.addEventListener("touchend", mouseUpHandler, false)
       this.rotationKeeper = 0
     }
 
-    this.renderer.domElement.addEventListener("mousedown", MouseDown, false);
-    this.renderer.domElement.addEventListener("touchstart", TouchStart, false);
+    this.renderer.domElement.addEventListener("mousedown", mouseDownHandler, false);
+    this.renderer.domElement.addEventListener("touchstart", touchStartHandler, false);
 
-    const MouseMove = (event) => {
-      this.rotationY = (event.clientX - onPointerDownPointerX) * 0.01 + onPointerDownLon;
-      this.rotationX = (event.clientY - onPointerDownPointerY) * 0.01 + onPointerDownLat;
+    const mouseMoveHandler = (event: MouseEvent) => {
+      this.rotationY = (event.clientX - onPointerDownX) * 0.01 + onPointerDownLon;
+      this.rotationX = (event.clientY - onPointerDownY) * 0.01 + onPointerDownLat;
     }
 
-    const TouchMove = (event) => {
+    const touchMoveHandler = (event: TouchEvent) => {
       this.rotationY =
-        (event.touches[0].clientX - onPointerDownPointerX) * 0.01 +
+        (event.touches[0].clientX - onPointerDownX) * 0.01 +
         onPointerDownLon;
       this.rotationX =
-        (event.touches[0].clientY - onPointerDownPointerY) * 0.01 +
+        (event.touches[0].clientY - onPointerDownY) * 0.01 +
         onPointerDownLat;
     }
 
-    const MouseUp = () => {
-      document.removeEventListener("mousemove", MouseMove, false);
-      document.removeEventListener("touchmove", TouchMove, false);
-      document.removeEventListener("mouseup", MouseUp, false);
-      document.removeEventListener("touchend", MouseUp, false);
+    const mouseUpHandler = () => {
+      document.removeEventListener("mousemove", mouseMoveHandler, false);
+      document.removeEventListener("touchmove", touchMoveHandler, false);
+      document.removeEventListener("mouseup", mouseUpHandler, false);
+      document.removeEventListener("touchend", mouseUpHandler, false);
       this.rotationKeeper = -0.01;
     }
 
@@ -315,18 +314,17 @@ class App {
     this.camera.position.y = 10;
     this.camera.lookAt(new THREE.Vector3(0, -1, 0));
 
-
     this.renderer.setPixelRatio(2);
     // renderer.setPixelRatio(devicePixelRatio);
     this.renderer.setSize(320, 250);
     this.renderer.autoClearColor = true;
     this.ui.app.appendChild(this.renderer.domElement);
 
-    this.mainLight = new THREE.SpotLight(0xffffff);
-    this.mainLight.position.x = 10;
-    this.mainLight.position.y = 0;
-    this.mainLight.position.z = 50;
-    this.scene.add(this.mainLight);
+    this.element.mainLight = new THREE.SpotLight(0xffffff);
+    this.element.mainLight.position.x = 10;
+    this.element.mainLight.position.y = 0;
+    this.element.mainLight.position.z = 50;
+    this.scene.add(this.element.mainLight);
 
     this.element.wordsRing = new THREE.Object3D();
     this.scene.add(this.element.wordsRing);
@@ -334,10 +332,10 @@ class App {
     if (this.shadowEnabled) {
       this.renderer.shadowMap.enabled = true;
       // this.renderer.shadowMap.type = THREE.PCFShadowMap;
-      this.mainLight.castShadow = true;
-      // this.mainLight.shadow.bias = 0.000001;
-      this.mainLight.shadow.mapSize.width = 2048;
-      this.mainLight.shadow.mapSize.height = 2048;
+      this.element.mainLight.castShadow = true;
+      // this.element.mainLight.shadow.bias = 0.000001;
+      this.element.mainLight.shadow.mapSize.width = 2048;
+      this.element.mainLight.shadow.mapSize.height = 2048;
       this.element.ring.receiveShadow = true;
       // this.element.ring.castShadow = true;
       this.element.line1.castShadow = true;
