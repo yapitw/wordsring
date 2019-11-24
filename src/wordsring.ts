@@ -1,7 +1,7 @@
 import * as THREE from "three"
-import addon from "./legacyJsonLoader"
+import addLegacyFunc from "./legacyJsonLoader"
 import { ringDimensions } from "./constant"
-addon(THREE)
+addLegacyFunc(THREE)
 
 
 class App {
@@ -9,7 +9,7 @@ class App {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
   mainLight: THREE.SpotLight
-  fontLoader: THREE.FontLoader
+  font: THREE.Font
   shadowEnabled: boolean
   rotationY: number
   rotationX: number
@@ -21,6 +21,7 @@ class App {
     inputLine2: HTMLInputElement
     selRingSize: HTMLSelectElement
     app: HTMLDivElement
+    linkElem: HTMLLinkElement
   }
 
   element: {
@@ -40,7 +41,8 @@ class App {
       inputLine1: document.querySelector("#line1"),
       inputLine2: document.querySelector("#line2"),
       selRingSize: document.querySelector("#ringSize"),
-      app: document.querySelector("#canvas")
+      app: document.querySelector("#canvas"),
+      linkElem: document.querySelector("#linkElme")
     }
 
     this.rotationY = 0
@@ -60,34 +62,172 @@ class App {
       ringMaterial: null
     }
 
-    this.init()
+    this.initScene()
+  }
+
+  loadAssets = async () => {
+    const loadFont = () => new Promise((resolve, reject) => {
+      const fontLoader = new THREE.FontLoader();
+      fontLoader.load("./fonts/Arial_Bold.json", (font) => {
+        this.font = font
+        resolve()
+      });
+    })
+
+    const loadTexture = () => new Promise((resolve, reject) => {
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load("textures/silverenvironment.jpg", (texture) => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        this.material.ringMaterial = new THREE.MeshPhongMaterial({
+          envMap: texture,
+          color: 0xffffff,
+          shininess: 80,
+          specular: 0x443333
+        });
+        resolve()
+      })
+    })
+    await Promise.all([
+      loadFont(), loadTexture()
+    ])
   }
 
   getYourLink = () => {
-    const linkElem: HTMLLinkElement = document.querySelector("#myLink")
+    const { ui } = this
     const tempUrl =
       `//${location.host}${location.pathname}` +
-      `?{"line1":"${this.ui.inputLine1.value}","line2":"${this.ui.inputLine2.value}","ringSize":"${this.ui.selRingSize.value}"}`
-    linkElem.href = tempUrl;
-    linkElem.innerHTML = tempUrl;
+      `?{"line1":"${ui.inputLine1.value}","line2":"${ui.inputLine2.value}","ringSize":"${ui.selRingSize.value}"}`
+    ui.linkElem.href = tempUrl;
+    ui.linkElem.innerHTML = tempUrl;
   }
 
   clearInput = () => {
-    const linkElem: HTMLLinkElement = document.querySelector("#myLink")
-    this.ui.inputLine1.value = "";
-    this.ui.inputLine2.value = "";
-    this.element.wordsRing.remove(this.element.line1);
-    this.element.wordsRing.remove(this.element.line2);
-    linkElem.href = "";
-    linkElem.innerHTML = "";
+    const { ui, element } = this
+    ui.inputLine1.value = ""
+    ui.inputLine2.value = ""
+    element.wordsRing.remove(element.line1)
+    element.wordsRing.remove(element.line2)
+    ui.linkElem.href = ""
+    ui.linkElem.innerHTML = ""
   }
 
   twoLineSwitch = () => {
-    if (this.ui.inputLine1.value == "" || this.ui.inputLine2.value == "") {
+    const { ui } = this
+    if (ui.inputLine1.value == "" || ui.inputLine2.value == "") {
       this.twoLine = false;
     } else {
       this.twoLine = true;
     }
+  }
+
+  loadRing = (dim: string) => {
+    const jsonLoader = new THREE.LegacyJSONLoader();
+    const path = this.twoLine
+      ? "jsonring/wordsring" + dim + ".json"
+      : "jsonring/wordsring" + dim + "s.json";
+    jsonLoader.load(path, (geometry) => {
+      this.element.wordsRing.remove(this.element.ring);
+      this.element.ring = new THREE.Mesh(geometry, this.material.ringMaterial);
+      this.fix(this.element.ring);
+      this.element.wordsRing.add(this.element.ring);
+    });
+  }
+
+  fix = (mesh: THREE.Mesh) => {
+    // mesh.geometry.computeFaceNormals();
+    mesh.geometry.computeVertexNormals();
+  }
+
+  bend = (geo: THREE.Geometry, r: number) => {
+    for (let i = 0; i < geo.vertices.length; i++) {
+      geo.vertices[i].z += r;
+    }
+
+    for (let i = 0; i < geo.vertices.length; i++) {
+      const x = geo.vertices[i].x;
+      const z = geo.vertices[i].z;
+      geo.vertices[i].z = z * Math.cos(x / r);
+      geo.vertices[i].x = z * Math.sin(x / r);
+    }
+  }
+
+  updateText = () => {
+    this.twoLineSwitch();
+    const dim = parseFloat(this.ui.selRingSize.value);
+    this.element.wordsRing.remove(this.element.darkInner);
+    this.element.darkInner = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        ringDimensions[dim] / 2 + 1.7,
+        ringDimensions[dim] / 2 + 1.7,
+        6,
+        32,
+        1,
+        true
+      ),
+      new THREE.MeshPhongMaterial({ color: 0x474444 })
+    );
+    this.element.wordsRing.add(this.element.darkInner);
+
+    if (this.ui.inputLine1.value !== "") {
+      this.element.wordsRing.remove(this.element.line1);
+      const textGeo = new THREE.TextGeometry(this.ui.inputLine1.value, {
+        font: this.font,
+        size: 2,
+        height: 1,
+        curveSegments: 4,
+        bevelThickness: 0.1,
+        bevelSize: 0.03,
+        bevelEnabled: true
+      });
+      textGeo.center();
+      this.bend(textGeo, ringDimensions[dim] / 2 + 1.85);
+      this.element.line1 = new THREE.Mesh(textGeo, this.material.ringMaterial);
+      if (this.twoLine) {
+        this.element.line1.position.y = +1.1;
+      }
+      this.fix(this.element.line1);
+      this.element.wordsRing.add(this.element.line1);
+    } else {
+      this.element.wordsRing.remove(this.element.line1);
+    }
+
+    if (this.ui.inputLine2.value !== "") {
+      this.element.wordsRing.remove(this.element.line2);
+      const textGeo = new THREE.TextGeometry(this.ui.inputLine2.value, {
+        font: this.font,
+        size: 2,
+        height: 1,
+        curveSegments: 4,
+        bevelThickness: 0.1,
+        bevelSize: 0.03,
+        bevelEnabled: true
+      });
+      textGeo.center();
+      this.bend(textGeo, ringDimensions[dim] / 2 + 1.85);
+      this.element.line2 = new THREE.Mesh(textGeo, this.material.ringMaterial);
+
+      if (this.twoLine) {
+        this.element.line2.position.y = -1.3;
+      }
+      this.fix(this.element.line2);
+      this.element.wordsRing.add(this.element.line2);
+    } else {
+      this.element.wordsRing.remove(this.element.line2);
+    }
+
+    this.loadRing(this.ui.selRingSize.value);
+  }
+
+  parseLink = () => {
+    if (location.search !== "") {
+      const urlText = JSON.parse(decodeURI(location.search.slice(1)));
+      if (urlText.line1 !== "" || (urlText.line2 !== "" && urlText.ringSize)) {
+        this.ui.inputLine1.value = urlText.line1;
+        this.ui.inputLine2.value = urlText.line2;
+        this.ui.selRingSize.value = urlText.ringSize;
+      }
+    }
+    this.updateText();
   }
 
   render = () => {
@@ -100,190 +240,7 @@ class App {
     this.renderer.render(this.scene, this.camera);
   }
 
-  init = () => {
-    this.shadowEnabled = false
-    this.renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true
-    })
-    this.scene = new THREE.Scene()
-    this.scene.fog = new THREE.Fog(0x000000, 55, 150);
-    this.camera = new THREE.PerspectiveCamera(30, 320 / 250, 0.1, 1000);
-    this.camera.position.z = 60;
-    this.camera.position.y = 10;
-    this.camera.lookAt(new THREE.Vector3(0, -1, 0));
-
-
-    this.renderer.setPixelRatio(2);
-    // renderer.setPixelRatio(devicePixelRatio);
-    this.renderer.setSize(320, 250);
-    this.renderer.autoClearColor = true;
-    this.ui.app.appendChild(this.renderer.domElement);
-
-    this.mainLight = new THREE.SpotLight(0xffffff);
-    this.mainLight.position.x = 10;
-    this.mainLight.position.y = 0;
-    this.mainLight.position.z = 50;
-    this.scene.add(this.mainLight);
-
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.load("textures/silverenvironment.jpg", (texture) => {
-      texture.mapping = THREE.EquirectangularReflectionMapping;
-      this.material.ringMaterial = new THREE.MeshPhongMaterial({
-        envMap: texture,
-        color: 0xffffff,
-        shininess: 80,
-        specular: 0x443333
-      });
-      parseLink();
-      this.render();
-    });
-
-
-    this.element.wordsRing = new THREE.Object3D();
-    this.scene.add(this.element.wordsRing);
-
-    this.fontLoader = new THREE.FontLoader();
-
-    const loadText = () => {
-      this.twoLineSwitch();
-      var dim = parseFloat(this.ui.selRingSize.value);
-      this.element.wordsRing.remove(this.element.darkInner);
-      this.element.darkInner = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          ringDimensions[dim] / 2 + 1.7,
-          ringDimensions[dim] / 2 + 1.7,
-          6,
-          32,
-          1,
-          true
-        ),
-        new THREE.MeshPhongMaterial({ color: 0x474444 })
-      );
-      this.element.wordsRing.add(this.element.darkInner);
-
-      if (this.ui.inputLine1.value !== "") {
-        this.fontLoader.load("./fonts/Arial_Bold.json", (font) => {
-          this.element.wordsRing.remove(this.element.line1);
-          var textGeo = new THREE.TextGeometry(this.ui.inputLine1.value, {
-            font: font,
-
-            size: 2,
-            height: 1,
-            curveSegments: 4,
-
-            bevelThickness: 0.1,
-            bevelSize: 0.03,
-            bevelEnabled: true
-          });
-          textGeo.center();
-          bend(textGeo, ringDimensions[dim] / 2 + 1.85);
-          this.element.line1 = new THREE.Mesh(textGeo, this.material.ringMaterial);
-          if (this.twoLine) {
-            this.element.line1.position.y = +1.1;
-          }
-          fix(this.element.line1);
-          this.element.wordsRing.add(this.element.line1);
-        });
-      } else {
-        this.element.wordsRing.remove(this.element.line1);
-      }
-
-      if (this.ui.inputLine2.value !== "") {
-        this.fontLoader.load("./fonts/Arial_Bold.json", (font) => {
-          this.element.wordsRing.remove(this.element.line2);
-          var textGeo = new THREE.TextGeometry(this.ui.inputLine2.value, {
-            font: font,
-
-            size: 2,
-            height: 1,
-            curveSegments: 4,
-
-            bevelThickness: 0.1,
-            bevelSize: 0.03,
-            bevelEnabled: true
-          });
-          textGeo.center();
-          bend(textGeo, ringDimensions[dim] / 2 + 1.85);
-          this.element.line2 = new THREE.Mesh(textGeo, this.material.ringMaterial);
-
-          if (this.twoLine) {
-            this.element.line2.position.y = -1.3;
-          }
-          fix(this.element.line2);
-          this.element.wordsRing.add(this.element.line2);
-        });
-      } else {
-        this.element.wordsRing.remove(this.element.line2);
-      }
-
-      loadRing(this.ui.selRingSize.value);
-    }
-
-    const loadRing = (dim: string) => {
-      const jsonLoader = new THREE.LegacyJSONLoader();
-      const path = this.twoLine
-        ? "jsonring/wordsring" + dim + ".json"
-        : "jsonring/wordsring" + dim + "s.json";
-      jsonLoader.load(path, (geometry) => {
-        this.element.wordsRing.remove(this.element.ring);
-        this.element.ring = new THREE.Mesh(geometry, this.material.ringMaterial);
-        fix(this.element.ring);
-        this.element.wordsRing.add(this.element.ring);
-      });
-    }
-
-    const bend = (geo, r) => {
-      for (let i = 0; i < geo.vertices.length; i++) {
-        geo.vertices[i].z += r;
-      }
-
-      for (let i = 0; i < geo.vertices.length; i++) {
-        var x = geo.vertices[i].x;
-        var z = geo.vertices[i].z;
-        geo.vertices[i].z = z * Math.cos(x / r);
-        geo.vertices[i].x = z * Math.sin(x / r);
-      }
-    }
-
-
-
-    if (this.shadowEnabled) {
-      this.renderer.shadowMap.enabled = true;
-      // this.renderer.shadowMap.type = THREE.PCFShadowMap;
-      this.mainLight.castShadow = true;
-      // this.mainLight.shadow.bias = 0.000001;
-      this.mainLight.shadow.mapSize.width = 2048;
-      this.mainLight.shadow.mapSize.height = 2048;
-      this.element.ring.receiveShadow = true;
-      // this.element.ring.castShadow = true;
-      this.element.line1.castShadow = true;
-      this.element.line1.receiveShadow = true;
-      this.element.line2.castShadow = true;
-      this.element.line2.receiveShadow = true;
-    }
-
-    const fix = (mesh) => {
-      mesh.geometry.computeFaceNormals();
-      mesh.geometry.computeVertexNormals();
-    }
-
-    const parseLink = () => {
-      if (location.search !== "") {
-        const urlText = JSON.parse(decodeURI(location.search.slice(1)));
-        if (urlText.line1 !== "" || (urlText.line2 !== "" && urlText.ringSize)) {
-          this.ui.inputLine1.value = urlText.line1;
-          this.ui.inputLine2.value = urlText.line2;
-          this.ui.selRingSize.value = urlText.ringSize;
-        }
-      }
-      loadText();
-    }
-
-    document.querySelector("#getYourLink").addEventListener("click", this.getYourLink)
-    document.querySelector("#clearInput").addEventListener("click", this.clearInput)
-
-
+  initController = () => {
     let onPointerDownPointerX: number
     let onPointerDownPointerY: number
     let onPointerDownLon: number
@@ -337,9 +294,61 @@ class App {
       this.rotationKeeper = -0.01;
     }
 
-    this.ui.inputLine1.addEventListener("input", loadText);
-    this.ui.inputLine2.addEventListener("input", loadText);
-    this.ui.selRingSize.addEventListener("change", loadText);
+    this.ui.inputLine1.addEventListener("input", this.updateText);
+    this.ui.inputLine2.addEventListener("input", this.updateText);
+    this.ui.selRingSize.addEventListener("change", this.updateText);
+    document.querySelector("#getYourLink").addEventListener("click", this.getYourLink)
+    document.querySelector("#clearInput").addEventListener("click", this.clearInput)
+  }
+
+  initScene = async () => {
+    await this.loadAssets()
+    this.shadowEnabled = false
+    this.renderer = new THREE.WebGLRenderer({
+      alpha: true,
+      antialias: true
+    })
+    this.scene = new THREE.Scene()
+    this.scene.fog = new THREE.Fog(0x000000, 55, 150);
+    this.camera = new THREE.PerspectiveCamera(30, 320 / 250, 0.1, 1000);
+    this.camera.position.z = 60;
+    this.camera.position.y = 10;
+    this.camera.lookAt(new THREE.Vector3(0, -1, 0));
+
+
+    this.renderer.setPixelRatio(2);
+    // renderer.setPixelRatio(devicePixelRatio);
+    this.renderer.setSize(320, 250);
+    this.renderer.autoClearColor = true;
+    this.ui.app.appendChild(this.renderer.domElement);
+
+    this.mainLight = new THREE.SpotLight(0xffffff);
+    this.mainLight.position.x = 10;
+    this.mainLight.position.y = 0;
+    this.mainLight.position.z = 50;
+    this.scene.add(this.mainLight);
+
+    this.element.wordsRing = new THREE.Object3D();
+    this.scene.add(this.element.wordsRing);
+
+    if (this.shadowEnabled) {
+      this.renderer.shadowMap.enabled = true;
+      // this.renderer.shadowMap.type = THREE.PCFShadowMap;
+      this.mainLight.castShadow = true;
+      // this.mainLight.shadow.bias = 0.000001;
+      this.mainLight.shadow.mapSize.width = 2048;
+      this.mainLight.shadow.mapSize.height = 2048;
+      this.element.ring.receiveShadow = true;
+      // this.element.ring.castShadow = true;
+      this.element.line1.castShadow = true;
+      this.element.line1.receiveShadow = true;
+      this.element.line2.castShadow = true;
+      this.element.line2.receiveShadow = true;
+    }
+
+    this.initController()
+    this.parseLink();
+    this.render();
   }
 }
 
