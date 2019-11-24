@@ -12,10 +12,12 @@
   "license": "ISC",
   "devDependencies": {
     "parcel": "^1.12.4",
+    "parcel-plugin-asset-copier": "^1.0.0",
     "sass": "^1.23.7",
     "typescript": "^3.7.2"
   },
   "dependencies": {
     "three": "^0.110.0"
-  }
+  },
+  "assetsPath": "assets"
 }
