@@ -3,7 +3,6 @@ import addLegacyFunc from "./legacyJsonLoader"
 import { ringDimensions } from "./constant"
 addLegacyFunc(THREE)
 
-
 class App {
   renderer: THREE.WebGLRenderer
   scene: THREE.Scene
@@ -131,15 +130,16 @@ class App {
 
   twoLineSwitch = () => {
     const { data } = this
+    let switched = false
     if ((data.line1 == "" || data.line2 == "") && this.twoLine === true) {
       this.twoLine = false;
-      return true
+      return switched = true
     }
     if ((data.line1 !== "" && data.line2 !== "") && this.twoLine === false) {
       this.twoLine = true
-      return true
+      return switched = true
     }
-    return false
+    return switched
   }
 
   loadRing = async (dim: string) => {
@@ -178,15 +178,16 @@ class App {
 
   updateText = async () => {
     console.log('Generate', this.generating)
+    this.generating = true
     this.ui.linkElem.href = ""
     this.ui.linkElem.innerText = ""
 
     const ringSizeChanged = this.data.ringSize !== this.ui.selRingSize.value
-    this.data.ringSize = this.ui.selRingSize.value
-
     const line1changed = this.data.line1 !== this.ui.inputLine1.value
-    this.data.line1 = this.ui.inputLine1.value
     const line2changed = this.data.line2 !== this.ui.inputLine2.value
+
+    this.data.ringSize = this.ui.selRingSize.value
+    this.data.line1 = this.ui.inputLine1.value
     this.data.line2 = this.ui.inputLine2.value
 
     const ringHeightChanged = this.twoLineSwitch();
@@ -196,13 +197,13 @@ class App {
     }
 
     if ((ringSizeChanged || ringHeightChanged || line1changed) && this.data.line1 !== "") {
-      this.updateLine(1)
+      this.updateTextElement(1)
     } else if (this.data.line1 == "") {
       this.element.wordsRing.remove(this.element.line1);
     }
 
     if ((ringSizeChanged || ringHeightChanged || line2changed) && this.data.line2 !== "") {
-      this.updateLine(2)
+      this.updateTextElement(2)
     } else if (this.data.line2 == "") {
       this.element.wordsRing.remove(this.element.line2);
     }
@@ -226,7 +227,7 @@ class App {
     this.loadRing(this.data.ringSize);
   }
 
-  updateLine = (seq: number) => {
+  updateTextElement = (seq: number) => {
     const dim = parseFloat(this.data.ringSize)
     const dataText = this.data["line" + seq]
     this.element.wordsRing.remove(this.element["line" + seq]);
@@ -234,7 +235,7 @@ class App {
       font: this.font,
       size: 2,
       height: 1,
-      curveSegments: 4,
+      curveSegments: 2,
       bevelThickness: 0.1,
       bevelSize: 0.03,
       bevelEnabled: true
