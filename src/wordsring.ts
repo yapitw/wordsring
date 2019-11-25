@@ -14,6 +14,13 @@ class App {
   rotationX: number
   rotationKeeper: number
   twoLine: boolean
+  generating: boolean
+
+  data: {
+    line1: string
+    line2: string
+    ringSize: string
+  }
 
   ui: {
     inputLine1: HTMLInputElement
@@ -30,6 +37,7 @@ class App {
     ring: THREE.Mesh
     darkInner: THREE.Mesh
     mainLight: THREE.SpotLight
+    ringMeshes: { [key: string]: THREE.Geometry }
   }
 
   material: {
@@ -37,6 +45,13 @@ class App {
   }
 
   constructor() {
+
+    this.data = {
+      line1: "",
+      line2: "",
+      ringSize: ""
+    }
+
     this.ui = {
       inputLine1: document.querySelector("#line1"),
       inputLine2: document.querySelector("#line2"),
@@ -56,7 +71,8 @@ class App {
       line2: null,
       ring: null,
       darkInner: null,
-      mainLight: null
+      mainLight: null,
+      ringMeshes: {}
     };
 
     this.material = {
@@ -95,18 +111,18 @@ class App {
   }
 
   getYourLink = () => {
-    const { ui } = this
+    const { ui, data } = this
     const tempUrl =
       `//${location.host}${location.pathname}` +
-      `?{"line1":"${ui.inputLine1.value}","line2":"${ui.inputLine2.value}","ringSize":"${ui.selRingSize.value}"}`
+      `?{"line1":"${data.line1}","line2":"${data.line2}","ringSize":"${data.ringSize}"}`
     ui.linkElem.href = tempUrl;
     ui.linkElem.innerHTML = "My Ring";
   }
 
   clearInput = () => {
-    const { ui, element } = this
-    ui.inputLine1.value = ""
-    ui.inputLine2.value = ""
+    const { ui, data, element } = this
+    ui.inputLine1.value = data.line1 = ""
+    ui.inputLine2.value = data.line2 = ""
     element.wordsRing.remove(element.line1)
     element.wordsRing.remove(element.line2)
     ui.linkElem.href = ""
@@ -114,23 +130,32 @@ class App {
   }
 
   twoLineSwitch = () => {
-    const { ui } = this
-    if (ui.inputLine1.value == "" || ui.inputLine2.value == "") {
+    const { data } = this
+    if ((data.line1 == "" || data.line2 == "") && this.twoLine === true) {
       this.twoLine = false;
-    } else {
-      this.twoLine = true;
+      return true
     }
+    if ((data.line1 !== "" && data.line2 !== "") && this.twoLine === false) {
+      this.twoLine = true
+      return true
+    }
+    return false
   }
 
-  loadRing = (dim: string) => {
+  loadRing = async (dim: string) => {
     const jsonLoader = new THREE.LegacyJSONLoader();
-    const path = `jsonring/wordsring${dim}${this.twoLine ? "" : "s"}.json`
-    jsonLoader.load(path, (geometry) => {
-      this.element.wordsRing.remove(this.element.ring);
-      this.element.ring = new THREE.Mesh(geometry, this.material.ringMaterial);
-      this.fix(this.element.ring);
-      this.element.wordsRing.add(this.element.ring);
-    });
+    const ringName = `wordsring${dim}${this.twoLine ? "" : "s"}`
+    const geometry = this.element.ringMeshes[ringName] ||
+      await new Promise<THREE.Geometry>((resolve, reject) => {
+        jsonLoader.load(`jsonring/${ringName}.json`, (geometry: THREE.Geometry) => {
+          resolve(this.element.ringMeshes[ringName] = geometry)
+        });
+      })
+
+    this.element.wordsRing.remove(this.element.ring)
+    this.element.ring = new THREE.Mesh(geometry, this.material.ringMaterial)
+    this.fix(this.element.ring);
+    this.element.wordsRing.add(this.element.ring);
   }
 
   fix = (mesh: THREE.Mesh) => {
@@ -151,11 +176,40 @@ class App {
     }
   }
 
-  updateText = () => {
-    this.twoLineSwitch();
+  updateText = async () => {
+    console.log('Generate', this.generating)
     this.ui.linkElem.href = ""
     this.ui.linkElem.innerText = ""
-    const dim = parseFloat(this.ui.selRingSize.value);
+
+    const ringSizeChanged = this.data.ringSize !== this.ui.selRingSize.value
+    this.data.ringSize = this.ui.selRingSize.value
+
+    const line1changed = this.data.line1 !== this.ui.inputLine1.value
+    this.data.line1 = this.ui.inputLine1.value
+    const line2changed = this.data.line2 !== this.ui.inputLine2.value
+    this.data.line2 = this.ui.inputLine2.value
+
+    const ringHeightChanged = this.twoLineSwitch();
+
+    if (ringSizeChanged || ringHeightChanged) {
+      this.updateRing()
+    }
+
+    if ((ringSizeChanged || ringHeightChanged || line1changed) && this.data.line1 !== "") {
+      this.updateLine(1)
+    } else if (this.data.line1 == "") {
+      this.element.wordsRing.remove(this.element.line1);
+    }
+
+    if ((ringSizeChanged || ringHeightChanged || line2changed) && this.data.line2 !== "") {
+      this.updateLine(2)
+    } else if (this.data.line2 == "") {
+      this.element.wordsRing.remove(this.element.line2);
+    }
+  }
+
+  updateRing = () => {
+    const dim = parseFloat(this.data.ringSize)
     this.element.wordsRing.remove(this.element.darkInner);
     this.element.darkInner = new THREE.Mesh(
       new THREE.CylinderGeometry(
@@ -169,65 +223,47 @@ class App {
       new THREE.MeshPhongMaterial({ color: 0x474444 })
     );
     this.element.wordsRing.add(this.element.darkInner);
+    this.loadRing(this.data.ringSize);
+  }
 
-    if (this.ui.inputLine1.value !== "") {
-      this.element.wordsRing.remove(this.element.line1);
-      const textGeo = new THREE.TextGeometry(this.ui.inputLine1.value, {
-        font: this.font,
-        size: 2,
-        height: 1,
-        curveSegments: 4,
-        bevelThickness: 0.1,
-        bevelSize: 0.03,
-        bevelEnabled: true
-      });
-      textGeo.center();
-      this.bend(textGeo, ringDimensions[dim] / 2 + 1.85);
-      this.element.line1 = new THREE.Mesh(textGeo, this.material.ringMaterial);
-      if (this.twoLine) {
-        this.element.line1.position.y = +1.1;
-      }
-      this.fix(this.element.line1);
-      this.element.wordsRing.add(this.element.line1);
-    } else {
-      this.element.wordsRing.remove(this.element.line1);
+  updateLine = (seq: number) => {
+    const dim = parseFloat(this.data.ringSize)
+    const dataText = this.data["line" + seq]
+    this.element.wordsRing.remove(this.element["line" + seq]);
+    const textGeo = new THREE.TextGeometry(dataText, {
+      font: this.font,
+      size: 2,
+      height: 1,
+      curveSegments: 4,
+      bevelThickness: 0.1,
+      bevelSize: 0.03,
+      bevelEnabled: true
+    });
+    textGeo.center();
+    this.bend(textGeo, ringDimensions[dim] / 2 + 1.85);
+    this.element["line" + seq] = new THREE.Mesh(textGeo, this.material.ringMaterial);
+
+    if (this.twoLine) {
+      this.element["line" + seq].position.y = 1.1 - (seq - 1) * 2.5;
     }
-
-    if (this.ui.inputLine2.value !== "") {
-      this.element.wordsRing.remove(this.element.line2);
-      const textGeo = new THREE.TextGeometry(this.ui.inputLine2.value, {
-        font: this.font,
-        size: 2,
-        height: 1,
-        curveSegments: 4,
-        bevelThickness: 0.1,
-        bevelSize: 0.03,
-        bevelEnabled: true
-      });
-      textGeo.center();
-      this.bend(textGeo, ringDimensions[dim] / 2 + 1.85);
-      this.element.line2 = new THREE.Mesh(textGeo, this.material.ringMaterial);
-
-      if (this.twoLine) {
-        this.element.line2.position.y = -1.3;
-      }
-      this.fix(this.element.line2);
-      this.element.wordsRing.add(this.element.line2);
-    } else {
-      this.element.wordsRing.remove(this.element.line2);
-    }
-
-    this.loadRing(this.ui.selRingSize.value);
+    this.fix(this.element["line" + seq]);
+    this.element.wordsRing.add(this.element["line" + seq]);
   }
 
   parseLink = () => {
+    let urlText
     if (location.search !== "") {
-      const urlText = JSON.parse(decodeURI(location.search.slice(1)));
-      if (urlText.line1 !== "" || (urlText.line2 !== "" && urlText.ringSize)) {
-        this.ui.inputLine1.value = urlText.line1;
-        this.ui.inputLine2.value = urlText.line2;
-        this.ui.selRingSize.value = urlText.ringSize;
-      }
+      urlText = JSON.parse(decodeURI(location.search.slice(1)));
+    }
+
+    if (urlText && (urlText.line1 !== "" || urlText.line2 !== "") && urlText.ringSize) {
+      this.ui.inputLine1.value = urlText.line1;
+      this.ui.inputLine2.value = urlText.line2;
+      this.ui.selRingSize.value = urlText.ringSize;
+    } else {
+      this.ui.inputLine1.value = "As selfishness and complaint cloud the mind,"
+      this.ui.inputLine2.value = "so love with its joy clears and sharpens the vision."
+      this.ui.selRingSize.value = "15"
     }
     this.updateText();
   }
