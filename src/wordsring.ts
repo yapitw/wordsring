@@ -14,6 +14,7 @@ class App {
   rotationKeeper: number
   twoLine: boolean
   generating: boolean
+  timeoutId: number[]
 
   data: {
     line1: string
@@ -63,6 +64,7 @@ class App {
     this.rotationX = 0
     this.rotationKeeper = -0.01
     this.twoLine = true
+    this.timeoutId = []
 
     this.element = {
       wordsRing: null,
@@ -177,7 +179,6 @@ class App {
   }
 
   updateText = async () => {
-    console.log('Generate', this.generating)
     this.generating = true
     this.ui.linkElem.href = ""
     this.ui.linkElem.innerText = ""
@@ -193,17 +194,20 @@ class App {
     const ringHeightChanged = this.twoLineSwitch();
 
     if (ringSizeChanged || ringHeightChanged) {
-      this.updateRing()
+      window.clearTimeout(this.timeoutId[0])
+      this.timeoutId[0] = window.setTimeout(this.updateRing, 100)
     }
 
     if ((ringSizeChanged || ringHeightChanged || line1changed) && this.data.line1 !== "") {
-      this.updateTextElement(1)
+      window.clearTimeout(this.timeoutId[1])
+      this.timeoutId[1] = window.setTimeout(() => this.updateTextElement(1), 100)
     } else if (this.data.line1 == "") {
       this.element.wordsRing.remove(this.element.line1);
     }
 
     if ((ringSizeChanged || ringHeightChanged || line2changed) && this.data.line2 !== "") {
-      this.updateTextElement(2)
+      window.clearTimeout(this.timeoutId[2])
+      this.timeoutId[2] = window.setTimeout(() => this.updateTextElement(2), 100)
     } else if (this.data.line2 == "") {
       this.element.wordsRing.remove(this.element.line2);
     }
