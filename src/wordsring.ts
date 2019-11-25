@@ -42,7 +42,7 @@ class App {
       inputLine2: document.querySelector("#line2"),
       selRingSize: document.querySelector("#ringSize"),
       app: document.querySelector("#canvas"),
-      linkElem: document.querySelector("#linkElme")
+      linkElem: document.querySelector("#myLink")
     }
 
     this.rotationY = 0
@@ -88,7 +88,7 @@ class App {
         resolve()
       })
     })
-    
+
     await Promise.all([
       loadFont(), loadTexture()
     ])
@@ -100,7 +100,7 @@ class App {
       `//${location.host}${location.pathname}` +
       `?{"line1":"${ui.inputLine1.value}","line2":"${ui.inputLine2.value}","ringSize":"${ui.selRingSize.value}"}`
     ui.linkElem.href = tempUrl;
-    ui.linkElem.innerHTML = tempUrl;
+    ui.linkElem.innerHTML = "My Ring";
   }
 
   clearInput = () => {
@@ -153,6 +153,8 @@ class App {
 
   updateText = () => {
     this.twoLineSwitch();
+    this.ui.linkElem.href = ""
+    this.ui.linkElem.innerText = ""
     const dim = parseFloat(this.ui.selRingSize.value);
     this.element.wordsRing.remove(this.element.darkInner);
     this.element.darkInner = new THREE.Mesh(
