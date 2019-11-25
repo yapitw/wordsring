@@ -362,6 +362,13 @@ class App {
     this.renderer.setSize(320, 250);
     this.renderer.autoClearColor = true;
     this.ui.app.appendChild(this.renderer.domElement);
+    setTimeout(() => {
+      this.ui.app.classList.remove('canvas--loading');
+    }, 100)
+    setTimeout(() => {
+      this.ui.app.querySelector(".loading-spin").remove();
+    }, 500)
+
 
     this.element.mainLight = new THREE.SpotLight(0xffffff);
     this.element.mainLight.position.x = 10;
