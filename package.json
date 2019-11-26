@@ -10,7 +10,8 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "yapi",
+  "private": true,
   "devDependencies": {
     "parcel": "^1.12.4",
     "parcel-plugin-asset-copier": "^1.0.0",
